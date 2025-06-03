@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wi-Fi Walkie Talkie</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #1a2a6c, #b21f1f, #1a2a6c);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5);
+            width: 100%;
+            max-width: 500px;
+            text-align: center;
+        }
+
+        header {
+            margin-bottom: 25px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            background: linear-gradient(to right, #4facfe, #00f2fe);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .subtitle {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            margin-bottom: 25px;
+        }
+
+        .connection-info {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .info-row:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+
+        .info-label {
+            font-weight: 600;
+            opacity: 0.8;
+        }
+
+        .info-value {
+            font-weight: 500;
+        }
+
+        .status-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        .status-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #ff4757;
+        }
+
+        .status-dot.connected {
+            background: #2ed573;
+        }
+
+        .status-text {
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin: 25px 0;
+        }
+
+        .btn {
+            padding: 16px 25px;
+            font-size: 1.2rem;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(to right, #00b09b, #96c93d);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        .btn-primary:active {
+            transform: translateY(1px);
+        }
+
+        .btn-danger {
+            background: linear-gradient(to right, #ff416c, #ff4b2b);
+            color: white;
+        }
+
+        .btn-danger:disabled {
+            background: #555;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        #status {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 20px;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            min-height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 20px 0;
+        }
+
+        #broadcastStatus {
+            background: rgba(255, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 10px;
+            font-weight: bold;
+            display: none;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+
+        .active-broadcast {
+            color: #ff6b81;
+        }
+
+        .ssl-warning {
+            background: rgba(255, 204, 0, 0.2);
+            border-left: 4px solid #ffcc00;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: left;
+        }
+
+        .ssl-warning h3 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            color: #ffcc00;
+        }
+
+        .instructions {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            margin: 25px 0;
+            text-align: left;
+        }
+
+        .instructions h3 {
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .instructions ol {
+            padding-left: 20px;
+        }
+
+        .instructions li {
+            margin-bottom: 12px;
+            line-height: 1.5;
+        }
+
+        footer {
+            margin-top: 25px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px;
+            }
+            
+            h1 {
+                font-size: 2rem;
+            }
+            
+            .btn {
+                padding: 14px;
+                font-size: 1.1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Wi-Fi Walkie Talkie</h1>
+            <div class="subtitle">Real-time voice communication over local network</div>
+        </header>
+
+        <div class="connection-info">
+            <div class="info-row">
+                <span class="info-label">Server:</span>
+                <span class="info-value" id="serverUrlDisplay">https://localhost:8443</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Your ID:</span>
+                <span class="info-value" id="clientIdDisplay">Not assigned</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Status:</span>
+                <div class="status-container">
+                    <div class="status-dot" id="statusDot"></div>
+                    <span class="status-text" id="connectionStatusText">Disconnected</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="status">Status: Initializing application...</div>
+
+        <div class="ssl-warning">
+            <h3>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ffcc00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                Important for Mobile Access
+            </h3>
+            <p>To use this app on your phone, you must accept the security warning for the self-signed certificate when accessing the HTTPS URL.</p>
+        </div>
+
+        <div class="controls">
+            <button id="startBtn" class="btn btn-primary">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <line x1="7" y1="12" x2="17" y2="12"></line>
+                </svg>
+                Start Broadcasting
+            </button>
+            <button id="stopBtn" class="btn btn-danger" disabled>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="6" y="4" width="4" height="16"></rect>
+                    <rect x="14" y="4" width="4" height="16"></rect>
+                </svg>
+                Stop Broadcasting
+            </button>
+        </div>
+
+        <div id="broadcastStatus"></div>
+
+        <div class="instructions">
+            <h3>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4facfe" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="16" x2="12" y2="12"></line>
+                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                </svg>
+                Mobile Access Instructions
+            </h3>
+            <ol>
+                <li>Connect your phone to the same Wi-Fi as this computer</li>
+                <li>Use the server URL shown above, but replace "localhost" with your computer's IP address</li>
+                <li>Add port 8443 to the URL (e.g., https://192.168.1.10:8443)</li>
+                <li>Accept the security warning about the certificate</li>
+                <li>Allow microphone access when prompted</li>
+            </ol>
+        </div>
+
+        <footer>
+            <p>Wi-Fi Walkie Talkie v1.0 &copy; 2023</p>
+            <p>Secured connection on port 8443</p>
+        </footer>
+    </div>
+
+    <script>
+        // DOM Elements
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const statusDiv = document.getElementById('status');
+        const broadcastStatusDiv = document.getElementById('broadcastStatus');
+        const statusDot = document.getElementById('statusDot');
+        const connectionStatusText = document.getElementById('connectionStatusText');
+        const clientIdDisplay = document.getElementById('clientIdDisplay');
+        const serverUrlDisplay = document.getElementById('serverUrlDisplay');
+        
+        // Application state
+        let mediaRecorder;
+        let audioContext;
+        let ws;
+        let audioStream;
+        let isBroadcasting = false;
+        let clientId = 'Unknown-' + Math.floor(Math.random() * 1000);
+        
+        // Detect server URL - use HTTPS with port 8443
+        const serverHost = window.location.hostname;
+        const isHttps = window.location.protocol === 'https:';
+        const serverPort = isHttps ? 8443 : 8080;
+        const wsProtocol = isHttps ? 'wss' : 'ws';
+        const serverUrl = `${wsProtocol}://${serverHost}:${serverPort}/audio-websocket`;
+        
+        // Update server display
+        serverUrlDisplay.textContent = `${window.location.protocol}//${serverHost}:${serverPort}`;
+        
+        // Check browser compatibility
+        function checkBrowserCompatibility() {
+            // Check for media devices support
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                showError("Your browser doesn't support microphone access. Please try Chrome or Firefox.");
+                return false;
+            }
+            
+            // Check for Web Audio API support
+            if (!(window.AudioContext || window.webkitAudioContext)) {
+                showError("Your browser doesn't support Web Audio API. Please update your browser.");
+                return false;
+            }
+            
+            return true;
+        }
+        
+        function showError(message) {
+            statusDiv.innerHTML = `<div style="color: #ff6b6b; font-weight: bold;">${message}</div>`;
+            startBtn.disabled = true;
+        }
+        
+        // Initialize WebSocket connection
+        function initWebSocket() {
+            statusDiv.textContent = "Status: Connecting to server...";
+            
+            ws = new WebSocket(serverUrl);
+            
+            ws.onopen = () => {
+                statusDiv.textContent = "Status: Connected to server";
+                connectionStatusText.textContent = "Connected";
+                statusDot.classList.add('connected');
+                
+                // Notify server we're ready
+                ws.send("READY");
+            };
+            
+            ws.onmessage = async (event) => {
+                if (event.data instanceof Blob) {
+                    // Mobile browsers require user gesture for audio playback
+                    if (!audioContext) {
+                        await initAudioContext();
+                    }
+                    await handleAudioData(event.data);
+                } else {
+                    handleControlMessage(event.data);
+                }
+            };
+            
+            ws.onclose = () => {
+                statusDiv.textContent = "Status: Disconnected from server";
+                connectionStatusText.textContent = "Disconnected";
+                statusDot.classList.remove('connected');
+                
+                // Try to reconnect after 3 seconds
+                setTimeout(initWebSocket, 3000);
+            };
+            
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                statusDiv.textContent = "Status: Connection error - " + error.message;
+            };
+        }
+        
+        // Initialize audio context with user gesture (required on iOS)
+        async function initAudioContext() {
+            return new Promise((resolve) => {
+                const initOnGesture = () => {
+                    if (!audioContext) {
+                        try {
+                            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                            console.log("AudioContext created after user gesture");
+                        } catch (e) {
+                            console.error("Error creating AudioContext:", e);
+                        }
+                    }
+                    resolve();
+                    
+                    // Remove event listeners after first interaction
+                    document.removeEventListener('click', initOnGesture);
+                    document.removeEventListener('touchstart', initOnGesture);
+                };
+                
+                document.addEventListener('click', initOnGesture);
+                document.addEventListener('touchstart', initOnGesture);
+            });
+        }
+        
+        // Handle control messages from server
+        function handleControlMessage(message) {
+            const parts = message.split(':');
+            const command = parts[0];
+            const data = parts[1] || '';
+            
+            switch(command) {
+                case 'ID':
+                    clientId = data;
+                    clientIdDisplay.textContent = clientId;
+                    break;
+                    
+                case 'BROADCAST_START':
+                    broadcastStatusDiv.style.display = 'block';
+                    broadcastStatusDiv.innerHTML = 
+                        `<div class="active-broadcast">🔴 LIVE: ${data} is broadcasting</div>`;
+                    break;
+                    
+                case 'BROADCAST_STOP':
+                    broadcastStatusDiv.style.display = 'none';
+                    break;
+                    
+                case 'BUSY':
+                    statusDiv.textContent = "Status: Channel busy! Someone else is broadcasting";
+                    stopBroadcasting();
+                    break;
+                    
+                case 'ERROR':
+                    statusDiv.textContent = `Error: ${data}`;
+                    break;
+            }
+        }
+        
+        // Handle incoming audio data
+        async function handleAudioData(blob) {
+            try {
+                const arrayBuffer = await blob.arrayBuffer();
+                
+                // Create audio context if not exists
+                if (!audioContext) {
+                    await initAudioContext();
+                }
+                
+                // Decode and play audio
+                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                const source = audioContext.createBufferSource();
+                source.buffer = audioBuffer;
+                source.connect(audioContext.destination);
+                source.start();
+                
+                // Visual feedback
+                broadcastStatusDiv.style.animation = 'pulse 0.5s';
+                setTimeout(() => {
+                    broadcastStatusDiv.style.animation = '';
+                }, 500);
+                
+            } catch (error) {
+                console.error('Error playing audio:', error);
+                statusDiv.textContent = "Error playing audio: " + error.message;
+            }
+        }
+        
+        // Start broadcasting
+        async function startBroadcasting() {
+            try {
+                statusDiv.textContent = "Status: Starting broadcast...";
+                
+                // Create audio context if not exists
+                if (!audioContext) {
+                    await initAudioContext();
+                }
+                
+                // Get microphone access
+                audioStream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                });
+                
+                // Create media recorder
+                const options = { 
+                    mimeType: 'audio/webm;codecs=opus',
+                    audioBitsPerSecond: 128000
+                };
+                
+                mediaRecorder = new MediaRecorder(audioStream, options);
+                
+                // Handle data available
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0 && ws.readyState === WebSocket.OPEN) {
+                        ws.send(event.data);
+                    }
+                };
+                
+                // Start recording in 100ms chunks
+                mediaRecorder.start(100);
+                
+                // Notify server
+                ws.send("START:" + clientId);
+                
+                // Update UI
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+                isBroadcasting = true;
+                statusDiv.textContent = "Status: Broadcasting...";
+                
+            } catch (error) {
+                console.error('Error starting broadcast:', error);
+                let errorMessage = `Error: ${error.message}`;
+                
+                if (error.name === 'NotAllowedError') {
+                    errorMessage = "Microphone access denied. Please allow microphone permissions in your browser settings.";
+                } else if (error.name === 'NotFoundError') {
+                    errorMessage = "No microphone found. Please connect a microphone.";
+                } else if (error.name === 'NotSupportedError') {
+                    errorMessage = "Audio recording not supported on this device.";
+                }
+                
+                statusDiv.textContent = errorMessage;
+                
+                // Reset UI on error
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+            }
+        }
+        
+        // Stop broadcasting
+        function stopBroadcasting() {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+            
+            if (audioStream) {
+                audioStream.getTracks().forEach(track => track.stop());
+            }
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send("STOP");
+            }
+            
+            // Update UI
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            isBroadcasting = false;
+            statusDiv.textContent = "Status: Broadcast stopped";
+        }
+        
+        // Setup button event listeners
+        startBtn.addEventListener('click', startBroadcasting);
+        stopBtn.addEventListener('click', stopBroadcasting);
+        
+        // Handle beforeunload to clean up
+        window.addEventListener('beforeunload', () => {
+            if (isBroadcasting) {
+                stopBroadcasting();
+            }
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.close();
+            }
+        });
+        
+        // Initialize when page loads
+        window.addEventListener('load', function() {
+            if (!checkBrowserCompatibility()) {
+                return;
+            }
+            
+            // Show HTTPS note if not using HTTPS
+            if (window.location.protocol !== 'https:') {
+                statusDiv.innerHTML = `
+                    <div class="ssl-warning">
+                        <h3>⚠️ Important Notice for Mobile Access</h3>
+                        <p>Your phone will require HTTPS to access the microphone. 
+                        For full functionality, access this page via: 
+                        <strong>https://${serverHost}:8443</strong></p>
+                    </div>
+                `;
+            }
+            
+            initWebSocket();
+        });
+    </script>
+</body>
+</html>
