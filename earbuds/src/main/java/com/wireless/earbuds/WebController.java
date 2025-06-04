@@ -10,4 +10,4 @@ public class WebController {
     public String index() {
         return "forward:/index.html";
     }
-}
+} 

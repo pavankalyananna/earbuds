@@ -10,8 +10,8 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 @Configuration
 @EnableWebSocket
 public class WebSocketConfig implements WebSocketConfigurer {
-
-    @Bean
+   
+    @Bean 
     public WebSocketHandler myHandler() {
         return new WalkieTalkieHandler();
     }
@@ -20,5 +20,5 @@ public class WebSocketConfig implements WebSocketConfigurer {
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(myHandler(), "/audio-websocket")
                 .setAllowedOrigins("*");
-    }
-}
+    } 
+}  

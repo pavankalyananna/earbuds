@@ -249,6 +249,39 @@
                 font-size: 1.1rem;
             }
         }
+        
+        .debug-panel {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+            text-align: left;
+            font-size: 0.9rem;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .debug-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .debug-log {
+            font-family: monospace;
+            font-size: 0.8rem;
+            line-height: 1.4;
+        }
+        
+        .audio-fix-note {
+            background: rgba(0, 100, 255, 0.2);
+            border-left: 4px solid #0064ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: left;
+        }
     </style>
 </head>
 <body>
@@ -309,6 +342,27 @@
         </div>
 
         <div id="broadcastStatus"></div>
+        
+        <div class="audio-fix-note">
+            <h3>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0064ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="16" x2="12" y2="12"></line>
+                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                </svg>
+                Audio Playback Help
+            </h3>
+            <p>If you don't hear audio: Click anywhere on the page to activate playback.</p>
+            <p>Broadcaster switching: The app will automatically reset the audio system when switching broadcasters.</p>
+        </div>
+        
+        <div class="debug-panel">
+            <div class="debug-title">
+                <strong>Debug Log</strong>
+                <button id="toggleDebug" class="btn btn-primary" style="padding: 5px 10px; font-size: 0.8rem;">Show/Hide</button>
+            </div>
+            <div id="debugLog" class="debug-log"></div>
+        </div>
 
         <div class="instructions">
             <h3>
@@ -344,15 +398,44 @@
         const connectionStatusText = document.getElementById('connectionStatusText');
         const clientIdDisplay = document.getElementById('clientIdDisplay');
         const serverUrlDisplay = document.getElementById('serverUrlDisplay');
+        const debugLog = document.getElementById('debugLog');
+        const toggleDebug = document.getElementById('toggleDebug');
         
         // Application state
         let mediaRecorder;
-        let audioContext;
         let ws;
         let audioStream;
         let isBroadcasting = false;
         let clientId = 'Unknown-' + Math.floor(Math.random() * 1000);
         
+        // MediaSource playback variables
+        let mediaSource;
+        let sourceBuffer;
+        let audioQueue = [];
+        let isAppending = false;
+        let audioPlayer;
+        let debugVisible = true;
+        let firstAudioReceived = false;
+        let audioStarted = false;
+        let currentBroadcaster = null;
+        let lastBroadcastAttempt = 0;
+        
+        // Debug logging
+        function logDebug(message) {
+            if (!debugVisible) return;
+            const logEntry = document.createElement('div');
+            logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            debugLog.appendChild(logEntry);
+            debugLog.scrollTop = debugLog.scrollHeight;
+        }
+        
+        // Toggle debug visibility
+        toggleDebug.addEventListener('click', () => {
+            debugVisible = !debugVisible;
+            debugLog.style.display = debugVisible ? 'block' : 'none';
+            toggleDebug.textContent = debugVisible ? 'Hide' : 'Show';
+        });
+
         // Detect server URL - use HTTPS with port 8443
         const serverHost = window.location.hostname;
         const isHttps = window.location.protocol === 'https:';
@@ -371,9 +454,9 @@
                 return false;
             }
             
-            // Check for Web Audio API support
-            if (!(window.AudioContext || window.webkitAudioContext)) {
-                showError("Your browser doesn't support Web Audio API. Please update your browser.");
+            // Check for MediaSource support
+            if (!('MediaSource' in window)) {
+                showError("Your browser doesn't support MediaSource API. Please update to the latest version of Chrome, Edge, or Firefox.");
                 return false;
             }
             
@@ -383,11 +466,13 @@
         function showError(message) {
             statusDiv.innerHTML = `<div style="color: #ff6b6b; font-weight: bold;">${message}</div>`;
             startBtn.disabled = true;
+            logDebug(`ERROR: ${message}`);
         }
         
         // Initialize WebSocket connection
         function initWebSocket() {
             statusDiv.textContent = "Status: Connecting to server...";
+            logDebug("Connecting to WebSocket server at: " + serverUrl);
             
             ws = new WebSocket(serverUrl);
             
@@ -395,19 +480,18 @@
                 statusDiv.textContent = "Status: Connected to server";
                 connectionStatusText.textContent = "Connected";
                 statusDot.classList.add('connected');
+                logDebug("WebSocket connection established");
                 
                 // Notify server we're ready
                 ws.send("READY");
             };
             
-            ws.onmessage = async (event) => {
+            ws.onmessage = (event) => {
                 if (event.data instanceof Blob) {
-                    // Mobile browsers require user gesture for audio playback
-                    if (!audioContext) {
-                        await initAudioContext();
-                    }
-                    await handleAudioData(event.data);
+                    logDebug(`Received audio blob (${event.data.size} bytes)`);
+                    handleAudioData(event.data);
                 } else {
+                    logDebug(`Received control message: ${event.data}`);
                     handleControlMessage(event.data);
                 }
             };
@@ -416,39 +500,190 @@
                 statusDiv.textContent = "Status: Disconnected from server";
                 connectionStatusText.textContent = "Disconnected";
                 statusDot.classList.remove('connected');
+                logDebug("WebSocket connection closed");
                 
                 // Try to reconnect after 3 seconds
                 setTimeout(initWebSocket, 3000);
             };
             
             ws.onerror = (error) => {
-                console.error('WebSocket error:', error);
+                logDebug(`WebSocket error: ${error.message}`);
                 statusDiv.textContent = "Status: Connection error - " + error.message;
             };
         }
         
-        // Initialize audio context with user gesture (required on iOS)
-        async function initAudioContext() {
-            return new Promise((resolve) => {
-                const initOnGesture = () => {
-                    if (!audioContext) {
-                        try {
-                            audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                            console.log("AudioContext created after user gesture");
-                        } catch (e) {
-                            console.error("Error creating AudioContext:", e);
+        // Initialize MediaSource for audio playback
+        function initMediaSource() {
+            logDebug("Initializing MediaSource...");
+            try {
+                // Clean up any existing MediaSource
+                if (mediaSource) {
+                    try {
+                        if (mediaSource.readyState === 'open') {
+                            mediaSource.endOfStream();
                         }
+                        if (audioPlayer && audioPlayer.src) {
+                            URL.revokeObjectURL(audioPlayer.src);
+                        }
+                    } catch (e) {
+                        logDebug("Error cleaning up previous MediaSource: " + e.message);
                     }
-                    resolve();
-                    
-                    // Remove event listeners after first interaction
-                    document.removeEventListener('click', initOnGesture);
-                    document.removeEventListener('touchstart', initOnGesture);
-                };
+                }
                 
-                document.addEventListener('click', initOnGesture);
-                document.addEventListener('touchstart', initOnGesture);
-            });
+                // Create new MediaSource
+                mediaSource = new MediaSource();
+                const objectUrl = URL.createObjectURL(mediaSource);
+                
+                // Create or reuse audio element
+                if (!audioPlayer) {
+                    audioPlayer = new Audio();
+                    audioPlayer.volume = 1.0;
+                    // Important: Don't set autoplay - we'll handle playback manually
+                    document.body.appendChild(audioPlayer);
+                }
+                audioPlayer.src = objectUrl;
+                
+                mediaSource.addEventListener('sourceopen', () => {
+                    logDebug("MediaSource opened");
+                    try {
+                        // Try different MIME types for maximum compatibility
+                        const mimeTypes = [
+                            'audio/webm; codecs=opus',
+                            'audio/webm',
+                            'audio/mp4; codecs=mp4a.40.2'
+                        ];
+                        
+                        for (const mime of mimeTypes) {
+                            try {
+                                sourceBuffer = mediaSource.addSourceBuffer(mime);
+                                logDebug(`Using MIME type: ${mime}`);
+                                break;
+                            } catch (e) {
+                                logDebug(`Unsupported MIME type: ${mime} - ${e.message}`);
+                            }
+                        }
+                        
+                        if (!sourceBuffer) {
+                            throw new Error("No supported MIME type found");
+                        }
+                        
+                        sourceBuffer.mode = 'sequence';
+                        sourceBuffer.addEventListener('updateend', () => {
+                            isAppending = false;
+                            processAudioQueue();
+                        });
+                        
+                        sourceBuffer.addEventListener('error', (e) => {
+                            logDebug('SourceBuffer error: ' + e.message);
+                            statusDiv.textContent = "Audio playback error. Trying to reset...";
+                            setTimeout(initMediaSource, 500); // Reset MediaSource on error
+                        });
+                        
+                        // Process any queued audio
+                        processAudioQueue();
+                        
+                        // Try to start playback
+                        startAudioPlayback();
+                        
+                    } catch (e) {
+                        logDebug('Error creating SourceBuffer: ' + e.message);
+                        statusDiv.textContent = "Error creating audio player: " + e.message;
+                        setTimeout(initMediaSource, 500); // Retry initialization
+                    }
+                });
+                
+                mediaSource.addEventListener('error', (e) => {
+                    logDebug('MediaSource error: ' + e.message);
+                    statusDiv.textContent = "Media source error. Trying to reset...";
+                    setTimeout(initMediaSource, 500); // Reset MediaSource on error
+                });
+                
+            } catch (e) {
+                logDebug('MediaSource initialization error: ' + e.message);
+                statusDiv.textContent = "Error initializing audio player: " + e.message;
+                setTimeout(initMediaSource, 1000); // Retry initialization
+            }
+        }
+        
+        // Reset audio system completely - CRITICAL FIX FOR BROADCASTER SWITCHING
+        function resetAudioSystem() {
+            logDebug("Resetting audio system...");
+            
+            // Clear audio queue
+            audioQueue = [];
+            
+            // Clean up MediaSource
+            if (mediaSource) {
+                try {
+                    if (mediaSource.readyState === 'open') {
+                        mediaSource.endOfStream();
+                    }
+                    if (audioPlayer && audioPlayer.src) {
+                        URL.revokeObjectURL(audioPlayer.src);
+                    }
+                } catch (e) {
+                    logDebug('MediaSource cleanup error: ' + e.message);
+                }
+                mediaSource = null;
+            }
+            
+            sourceBuffer = null;
+            isAppending = false;
+            audioStarted = false;
+            
+            // Reinitialize MediaSource
+            setTimeout(initMediaSource, 100);
+        }
+        
+        // Start audio playback - FIX FOR AUTOPLAY POLICIES
+        function startAudioPlayback() {
+            if (audioStarted) return;
+            
+            if (audioPlayer && audioPlayer.paused) {
+                const promise = audioPlayer.play();
+                
+                if (promise !== undefined) {
+                    promise.then(() => {
+                        logDebug("Audio playback started successfully");
+                        audioStarted = true;
+                    }).catch(error => {
+                        logDebug("Autoplay blocked: " + error.message);
+                        statusDiv.textContent = "Status: Click anywhere to start audio playback";
+                    });
+                }
+            }
+        }
+        
+        // Process audio queue
+        function processAudioQueue() {
+            if (!sourceBuffer || isAppending || audioQueue.length === 0) return;
+            
+            isAppending = true;
+            const blob = audioQueue.shift();
+            
+            const reader = new FileReader();
+            reader.onload = () => {
+                try {
+                    if (sourceBuffer && mediaSource.readyState === 'open') {
+                        sourceBuffer.appendBuffer(reader.result);
+                        logDebug(`Appending audio buffer (${reader.result.byteLength} bytes)`);
+                    }
+                } catch (e) {
+                    logDebug('Error appending buffer: ' + e.message);
+                    isAppending = false;
+                    // Add the blob back to the queue for retry
+                    audioQueue.unshift(blob);
+                    setTimeout(processAudioQueue, 50);
+                }
+            };
+            
+            reader.onerror = () => {
+                logDebug('FileReader error');
+                isAppending = false;
+                setTimeout(processAudioQueue, 50);
+            };
+            
+            reader.readAsArrayBuffer(blob);
         }
         
         // Handle control messages from server
@@ -461,94 +696,148 @@
                 case 'ID':
                     clientId = data;
                     clientIdDisplay.textContent = clientId;
+                    logDebug(`Assigned client ID: ${clientId}`);
                     break;
                     
                 case 'BROADCAST_START':
+                    // Reset audio system when broadcaster changes - CRITICAL FIX
+                    if (data !== currentBroadcaster) {
+                        logDebug(`New broadcaster detected: ${data} (previous: ${currentBroadcaster})`);
+                        resetAudioSystem();
+                        currentBroadcaster = data;
+                    }
+                    
                     broadcastStatusDiv.style.display = 'block';
                     broadcastStatusDiv.innerHTML = 
                         `<div class="active-broadcast">🔴 LIVE: ${data} is broadcasting</div>`;
+                    logDebug(`Broadcast started by: ${data}`);
                     break;
                     
                 case 'BROADCAST_STOP':
                     broadcastStatusDiv.style.display = 'none';
+                    logDebug("Broadcast stopped");
+                    // Reset audio when broadcast stops to prepare for next broadcaster
+                    resetAudioSystem();
+                    currentBroadcaster = null;
                     break;
                     
                 case 'BUSY':
                     statusDiv.textContent = "Status: Channel busy! Someone else is broadcasting";
                     stopBroadcasting();
+                    logDebug("Busy signal received");
+                    break;
+                    
+                case 'WAIT':
+                    statusDiv.textContent = "Status: Please wait before broadcasting again";
+                    stopBroadcasting();
+                    logDebug("Wait signal received");
                     break;
                     
                 case 'ERROR':
                     statusDiv.textContent = `Error: ${data}`;
+                    logDebug(`Server error: ${data}`);
                     break;
             }
         }
         
         // Handle incoming audio data
-        async function handleAudioData(blob) {
-            try {
-                const arrayBuffer = await blob.arrayBuffer();
-                
-                // Create audio context if not exists
-                if (!audioContext) {
-                    await initAudioContext();
-                }
-                
-                // Decode and play audio
-                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-                const source = audioContext.createBufferSource();
-                source.buffer = audioBuffer;
-                source.connect(audioContext.destination);
-                source.start();
-                
-                // Visual feedback
-                broadcastStatusDiv.style.animation = 'pulse 0.5s';
-                setTimeout(() => {
-                    broadcastStatusDiv.style.animation = '';
-                }, 500);
-                
-            } catch (error) {
-                console.error('Error playing audio:', error);
-                statusDiv.textContent = "Error playing audio: " + error.message;
+        function handleAudioData(blob) {
+            if (!firstAudioReceived) {
+                firstAudioReceived = true;
+                logDebug("First audio packet received");
             }
+            
+            if (!mediaSource || mediaSource.readyState !== 'open') {
+                initMediaSource();
+            }
+            
+            // Add to queue
+            audioQueue.push(blob);
+            
+            // Start processing if not already
+            if (!isAppending) {
+                processAudioQueue();
+            }
+            
+            // Visual feedback
+            broadcastStatusDiv.style.animation = 'pulse 0.5s';
+            setTimeout(() => {
+                broadcastStatusDiv.style.animation = '';
+            }, 500);
         }
         
         // Start broadcasting
         async function startBroadcasting() {
             try {
-                statusDiv.textContent = "Status: Starting broadcast...";
-                
-                // Create audio context if not exists
-                if (!audioContext) {
-                    await initAudioContext();
+                // Prevent rapid broadcaster switching
+                const now = Date.now();
+                if (now - lastBroadcastAttempt < 2000) {
+                    statusDiv.textContent = "Status: Please wait before switching broadcasters";
+                    return;
                 }
+                lastBroadcastAttempt = now;
+                
+                statusDiv.textContent = "Status: Starting broadcast...";
+                logDebug("Starting broadcast...");
                 
                 // Get microphone access
                 audioStream = await navigator.mediaDevices.getUserMedia({ 
                     audio: {
                         echoCancellation: true,
                         noiseSuppression: true,
-                        autoGainControl: true
+                        autoGainControl: true,
+                        channelCount: 1 // Mono audio for better compatibility
                     }
                 });
+                logDebug("Microphone access granted");
                 
-                // Create media recorder
-                const options = { 
-                    mimeType: 'audio/webm;codecs=opus',
-                    audioBitsPerSecond: 128000
-                };
+                // Create media recorder with compatibility fallbacks
+                let options;
+                const mimeTypes = [
+                    'audio/webm;codecs=opus',
+                    'audio/mpeg',
+                    'audio/wav',
+                    ''
+                ];
                 
-                mediaRecorder = new MediaRecorder(audioStream, options);
+                for (const mime of mimeTypes) {
+                    try {
+                        if (mime && MediaRecorder.isTypeSupported(mime)) {
+                            options = { 
+                                mimeType: mime,
+                                audioBitsPerSecond: 16000
+                            };
+                            logDebug(`Using MIME type: ${mime}`);
+                            break;
+                        }
+                    } catch (e) {
+                        logDebug(`MIME type ${mime} not supported: ${e.message}`);
+                    }
+                }
+                
+                if (!options) {
+                    options = { audioBitsPerSecond: 16000 };
+                    logDebug("Using default recorder settings");
+                }
+                
+                try {
+                    mediaRecorder = new MediaRecorder(audioStream, options);
+                } catch (e) {
+                    logDebug(`Error creating MediaRecorder: ${e.message}. Using default settings.`);
+                    mediaRecorder = new MediaRecorder(audioStream);
+                }
                 
                 // Handle data available
                 mediaRecorder.ondataavailable = (event) => {
                     if (event.data.size > 0 && ws.readyState === WebSocket.OPEN) {
                         ws.send(event.data);
+                        logDebug(`Sent audio chunk: ${event.data.size} bytes`);
                     }
                 };
                 
                 // Start recording in 100ms chunks
                 mediaRecorder.start(100);
+                logDebug("MediaRecorder started");
                 
                 // Notify server
                 ws.send("START:" + clientId);
@@ -560,7 +849,7 @@
                 statusDiv.textContent = "Status: Broadcasting...";
                 
             } catch (error) {
-                console.error('Error starting broadcast:', error);
+                logDebug(`Error starting broadcast: ${error.message}`);
                 let errorMessage = `Error: ${error.message}`;
                 
                 if (error.name === 'NotAllowedError') {
@@ -581,12 +870,14 @@
         
         // Stop broadcasting
         function stopBroadcasting() {
+            logDebug("Stopping broadcast...");
             if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                 mediaRecorder.stop();
             }
             
             if (audioStream) {
                 audioStream.getTracks().forEach(track => track.stop());
+                audioStream = null;
             }
             
             if (ws && ws.readyState === WebSocket.OPEN) {
@@ -604,6 +895,18 @@
         startBtn.addEventListener('click', startBroadcasting);
         stopBtn.addEventListener('click', stopBroadcasting);
         
+        // Enable audio playback on user interaction
+        document.addEventListener('click', function() {
+            if (audioPlayer && audioPlayer.paused) {
+                audioPlayer.play().then(() => {
+                    logDebug("Audio playback started by user interaction");
+                    audioStarted = true;
+                }).catch(error => {
+                    logDebug("Audio playback failed: " + error.message);
+                });
+            }
+        });
+        
         // Handle beforeunload to clean up
         window.addEventListener('beforeunload', () => {
             if (isBroadcasting) {
@@ -612,6 +915,20 @@
             
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.close();
+            }
+            
+            // Clean up MediaSource
+            if (mediaSource) {
+                try {
+                    if (mediaSource.readyState === 'open') {
+                        mediaSource.endOfStream();
+                    }
+                    if (audioPlayer && audioPlayer.src) {
+                        URL.revokeObjectURL(audioPlayer.src);
+                    }
+                } catch (e) {
+                    logDebug('MediaSource cleanup error: ' + e.message);
+                }
             }
         });
         
