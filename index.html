@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>User Login</title>
+<style>
+  :root {
+    --color-bg: #ffffff;
+    --color-text-primary: #111827;
+    --color-text-secondary: #6b7280;
+    --color-input-bg: #f9fafb;
+    --color-input-border: #d1d5db;
+    --color-button-bg: #111827;
+    --color-button-hover: #374151;
+    --border-radius: 0.75rem;
+    --shadow-light: rgba(0, 0, 0, 0.05);
+    --font-family-heading: 'Inter', system-ui, sans-serif;
+    --font-family-body: system-ui, sans-serif;
+  }
+
+  /* Import Inter font from Google Fonts */
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@600;700&display=swap');
+
+  /* Reset and base */
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    background-color: var(--color-bg);
+    color: var(--color-text-secondary);
+    font-family: var(--font-family-body);
+    line-height: 1.5;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 2rem;
+  }
+
+  /* Container card */
+  .login-card {
+    background-color: var(--color-bg);
+    max-width: 400px;
+    width: 100%;
+    padding: 3rem 2.5rem;
+    border-radius: var(--border-radius);
+    box-shadow: 0 8px 24px var(--shadow-light);
+    text-align: center;
+  }
+
+  .login-card h1 {
+    font-family: var(--font-family-heading);
+    font-weight: 700;
+    font-size: 2.5rem;
+    color: var(--color-text-primary);
+    margin-bottom: 1.5rem;
+  }
+
+  /* Form */
+  form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  label {
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--color-text-primary);
+    text-align: left;
+    display: block;
+    margin-bottom: 0.25rem;
+  }
+
+  input[type="email"],
+  input[type="password"] {
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    color: var(--color-text-primary);
+    background-color: var(--color-input-bg);
+    border: 1px solid var(--color-input-border);
+    border-radius: var(--border-radius);
+    transition: border-color 0.3s ease;
+    width: 100%;
+  }
+  input[type="email"]:focus,
+  input[type="password"]:focus {
+    outline: none;
+    border-color: var(--color-button-bg);
+    box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.2);
+    background-color: #fff;
+  }
+
+  /* Button */
+  button {
+    background-color: var(--color-button-bg);
+    color: #fff;
+    font-weight: 700;
+    font-size: 1.125rem;
+    padding: 0.75rem 1rem;
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+    user-select: none;
+  }
+  button:hover,
+  button:focus {
+    background-color: var(--color-button-hover);
+    transform: scale(1.03);
+    outline: none;
+  }
+  button:active {
+    transform: scale(0.98);
+  }
+
+  /* Accessibility helper */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  /* Responsive adjustments */
+  @media (max-width: 480px) {
+    .login-card {
+      padding: 2rem 1.5rem;
+    }
+    .login-card h1 {
+      font-size: 2rem;
+    }
+    button {
+      font-size: 1rem;
+      padding: 0.75rem;
+    }
+  }
+</style>
+</head>
+<body>
+  <main class="login-card" role="main" aria-label="User login form">
+    <h1>User Login</h1>
+    <form id="loginForm" novalidate>
+      <div>
+        <label for="email">Email address</label>
+        <input
+          type="email"
+          id="email"
+          name="email"
+          placeholder="you@example.com"
+          autocomplete="email"
+          required
+          aria-describedby="emailHelp"
+        />
+      </div>
+      <div>
+        <label for="password">Password</label>
+        <input
+          type="password"
+          id="password"
+          name="password"
+          placeholder="Enter your password"
+          autocomplete="current-password"
+          required
+          minlength="6"
+          aria-describedby="passwordHelp"
+        />
+      </div>
+      <button type="submit" aria-label="Log in to your account">Log In</button>
+    </form>
+  </main>
+  <script>
+    document.getElementById('loginForm').addEventListener('submit', function(event) {
+      event.preventDefault();
+      const email = this.email.value.trim();
+      const password = this.password.value.trim();
+
+      if (!email) {
+        alert('Please enter your email address.');
+        this.email.focus();
+        return;
+      }
+      if (!password) {
+        alert('Please enter your password.');
+        this.password.focus();
+        return;
+      }
+      if (password.length < 6) {
+        alert('Password must be at least 6 characters long.');
+        this.password.focus();
+        return;
+      }
+      // For demo, just show an alert since no backend to process login
+      alert('Login submitted!\nEmail: ' + email);
+      this.reset();
+    });
+  </script>
+</body>
+</html>
+
